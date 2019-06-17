@@ -1,0 +1,6 @@
+*.xml
+/combined/
+/mcc/
+/out/
+/xmls/*.xml
+!/xmls/*rep0.xml

@@ -1,10 +1,6 @@
 *.csv
 *.tsv
 /bdsky/
-/bdskynucdiff/
-/bdskynucdiff/*.trees
-/bdskynucdiff/*.log
-/bdskynucdiff/*.xml
 plotBDSKY.R
 plotTreeHeights.R
 getBSKYxmls.m
