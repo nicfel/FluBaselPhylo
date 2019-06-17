@@ -1,0 +1,13 @@
+.DS_Store
+/consensus/
+/vcf/
+/gisaid/*.fasta
+/rawreads/
+/out/
+ETH Table Influenza_2 (1).csv
+/doubleEntries/
+/tmp/
+List_sequenced_20170716.xlsx
+*.csv
+*.tsv
+sequences_to_use.txt
