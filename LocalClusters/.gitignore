@@ -1,0 +1,11 @@
+NA
+/constcoal/
+/localclusters/
+/localclustersnucdiff/
+/typed/
+/typednucdiff/
+buildMCCconstcoal.R
+getClusterAssignmentsConstCoal.m
+getPairwiseDistances.m
+getDistances.m
+makeConstCoalxml.m
