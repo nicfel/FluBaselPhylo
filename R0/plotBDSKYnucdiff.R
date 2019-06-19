@@ -181,8 +181,8 @@ p_wea <- ggplot() +
   theme_minimal() + 
   xlab("") + 
   ylab("Air temperature [°C]") +
-  scale_color_manual(name="",values = c("mean_Reff R_e"="black", "Humidity"="#0072B2", "Temperature"="#D55E00","School Day" = "#009E73"), 
-                     labels=c("Relative Humidity", expression('mean R' [eff] ), "Temperature",  "School Day"))+
+  scale_color_manual(name="",values = c("mean_Reff R_e"="black", "Humidity"="#0072B2","School Day" = "#009E73", "Temperature"="#D55E00"), 
+                     labels=c("Relative Humidity", expression('mean R' [eff] ),  "School Day", "Temperature"))+
     scale_fill_manual(name="",values = c(rgb(0.8,0.8,0.8), "red"), labels=c("weekly cases",expression('95% interval')))
 plot(p_wea)
 

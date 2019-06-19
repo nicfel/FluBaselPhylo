@@ -1,0 +1,5 @@
+/combined/*.trees
+/mcc/
+/out/
+/xmls/*.xml
+!/xmls/*rep0.xml
