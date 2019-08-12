@@ -1,0 +1,10 @@
+files=*.xml;
+for file in $files;
+do
+
+OMP_NUM_THREADS=1 bsub -W 240:00 -J new${file} -n 1 -R "rusage[mem=32000]"  java -jar ~/jar/GLM.jar ${file}
+
+OMP_NUM_THREADS=1 bsub -W 240:00 -J new${file} -w "done(new${file})" -n 1 -R "rusage[mem=32000]"  java -jar ~/jar/GLM.jar -resume ${file}
+OMP_NUM_THREADS=1 bsub -W 240:00 -J new${file} -w "done(new${file})" -n 1 -R "rusage[mem=32000]"  java -jar ~/jar/GLM.jar -resume ${file}
+OMP_NUM_THREADS=1 bsub -W 240:00 -J new${file} -w "done(new${file})" -n 1 -R "rusage[mem=32000]"  java -jar ~/jar/GLM.jar -resume ${file}
+done
