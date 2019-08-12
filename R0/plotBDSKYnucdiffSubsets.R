@@ -91,6 +91,9 @@ for (sub in seq(1,10)){
   
   # read in the weather data
   weather.hour <- read.table("./../NonSequenceData/WeatherDataBasel.csv", header=TRUE, sep=";")
+  # and the school holidays
+  school <- read.table("./scoolholidays.csv", header=TRUE, sep=",")
+  
   # get the min max data over the day
   for (i in seq(1, length(weather.hour$Year)/24)){
     init_point = (i-1)*24+1
@@ -102,12 +105,18 @@ for (sub in seq(1,10)){
       max.vals[1,j] = max(weather.hour[init_point:(init_point+23), j])
       mean.vals[1,j] = mean(weather.hour[init_point:(init_point+23), j])
     }
+    min.vals$SchoolHolidays  = school[i, "School_Day"]
+    max.vals$SchoolHolidays  = school[i, "School_Day"]
+    mean.vals$SchoolHolidays  = school[i, "School_Day"]
+    
     min.vals$bound = "min"
     max.vals$bound = "max"
     mean.vals$bound = "mean"
+    
     min.vals$time = as.Date(paste(min.vals$Year,min.vals$Month,min.vals$Day,sep="-"))
     max.vals$time = as.Date(paste(min.vals$Year,min.vals$Month,min.vals$Day,sep="-"))
     mean.vals$time = as.Date(paste(min.vals$Year,min.vals$Month,min.vals$Day,sep="-"))
+    
     new.vals = rbind(min.vals, max.vals, mean.vals)
     
     if (i==1){
@@ -161,7 +170,8 @@ for (sub in seq(1,10)){
     scale_x_date(date_labels = "%d %b %y", limits=c(as.Date("2016-11-22"), as.Date("2017-3-15")))+
     ylab("effective reproduction number") +
     scale_color_manual(name="",values = c("black"), labels=expression('mean R' [eff]))+
-    scale_fill_manual(name="",values = c(rgb(0.8,0.8,0.8), "red"), labels=c("weekly cases",expression('95% interval')))
+    scale_fill_manual(name="",values = c(rgb(0.8,0.8,0.8), "red"), labels=c("weekly cases",expression('95% interval'))) +
+    theme(legend.position = "none")
 
   weather_dat <- vals[which(vals$bound=="max"), c("time", "Temperature")]
   weather_dat$TemperatureUpper = weather_dat$Temperature
@@ -172,15 +182,15 @@ for (sub in seq(1,10)){
   weather_dat$RelHumUpper<- vals[which(vals$bound=="max"), "Relative_Humidity"]
   weather_dat$RelHumMean<- vals[which(vals$bound=="mean"), "Relative_Humidity"]
   
+  weather_dat$SchoolHoliday<- vals[which(vals$bound=="mean"), "SchoolHolidays"]
+  
   p_wea[[sub]] <- ggplot() +
+    geom_bar(data=case_date, aes(x=date, y=numbers/50, fill=all), color=NA, stat="identity") +
+    geom_step(data = weather_dat, aes(x=time, y=SchoolHoliday*1.5+0.5, color="School Day")) +
     geom_line(data=dat, aes(x=date, y=mean, color="mean_Reff R_e")) +
-    geom_ribbon(data=dat, aes(x=date, ymin=upper, ymax=lower, fill="confidence interval"), alpha="0.2") +
-    # geom_ribbon(data = weather_dat, aes(x=time, ymin=RelHumLower/50, ymax=RelHumUpper/50, fill="Humidity"), alpha="0.5") +
-    # geom_ribbon(data = weather_dat, aes(x=time, ymin=TemperatureLower/20+1, ymax=TemperatureUpper/20+1, fill="Temperature"), alpha="0.5") +
+    geom_ribbon(data=dat, aes(x=date, ymin=upper, ymax=lower, fill="confidence interval"), alpha="0.1") +
     geom_line(data = weather_dat, aes(x=time, y=RelHumMean/50, color="Humidity")) +
     geom_line(data = weather_dat, aes(x=time, y=TemperatureMean/20+1, color="Temperature")) +
-    
-    # geom_line(aes(x=time, y=Relative_Humidity, group = bound)) +
     theme(axis.ticks.x=element_line())+
     scale_x_date(date_labels = "%d %b %y", limits=c(as.Date("2016-11-22"), as.Date("2017-3-15")))+
     scale_y_continuous(limits=c(0.5,2.3), breaks=c(0.5,1,1.5,2),labels=c(-10,0,10,20),
@@ -188,107 +198,299 @@ for (sub in seq(1,10)){
     theme_minimal() + 
     xlab("") + 
     ylab("Air temperature [°C]") +
-    scale_color_manual(name="",values = c("mean_Reff R_e"="black", "Humidity"="blue", "Temperature"="red"), labels=c("Relative Humidity", expression('mean R' [eff] ), "Temperature"))+
-    scale_fill_manual(name="",values = c("red"))
+    scale_color_manual(name="",values = c("mean_Reff R_e"="black", "Humidity"="#0072B2","School Day" = "#009E73", "Temperature"="#D55E00"), 
+                       labels=c("Relative Humidity", expression('mean R' [eff] ),  "School Day", "Temperature"))+
+    scale_fill_manual(name="",values = c(rgb(0.8,0.8,0.8), "red"), labels=c("weekly cases",expression('95% interval')))+
+    theme(legend.position = "none")
   
 
-  # ggsave(plot=p_reff,"/Users/nicmuell/Documents/github/BaselFlu-Text/Figures/Global/bdsky_nucdiff.pdf",width=6, height=4)
-  # ggsave(plot=p_reff,"/Users/nicmuell/Documents/github/BaselFlu-Text/Figures/Global/bdsky_nucdiff.png",width=6, height=4)
-  # ggsave(plot=p_wea,"/Users/nicmuell/Documents/github/BaselFlu-Text/Figures/Global/weather_nucdiff.pdf",width=6, height=4)
-  # ggsave(plot=p_wea,"/Users/nicmuell/Documents/github/BaselFlu-Text/Figures/Global/weather_nucdiff.png",width=6, height=4)
-  # 
-  
-  ## calculate cross-correlations between R_eff and the mean weather values
-  re.for.corr <- dat[which(dat$date>=as.Date("2016-12-01")),]
-  re.for.corr <- re.for.corr[which(re.for.corr$date<=as.Date("2017-2-01")),]
-  weather.for.corr <- vals[is.element(vals$time,re.for.corr$date),]
-  weather.for.corr <- weather.for.corr[which(weather.for.corr$bound=="mean"),]
-  
-  weather.labels = labels(weather.for.corr)
-  
-  library(Hmisc)
-  for (i in seq(6,length(weather.labels[[2]])-2)){
-    weather.labels[[2]][i] 
-    cor.vals = rcorr(re.for.corr$mean, weather.for.corr[,weather.labels[[2]][i]], type="pearson")
-    new.corr.vals = data.frame(label=weather.labels[[2]][i], correlation=cor.vals$r["x","y"], p_value=cor.vals$P["x","y"])
-    if (i==6){
-      corr.vals = new.corr.vals
-    }else{
-      corr.vals = rbind(corr.vals, new.corr.vals)
+  startDate = c(as.Date("2016-11-01"), as.Date("2016-12-01"))
+  endDate = c(as.Date("2017-3-01"), as.Date("2017-2-01"))
+  for (c in seq(1,length(startDate))){
+    print(c)
+    
+    ## calculate correlations between R_eff and the mean weather values
+    re.for.corr <- dat[which(dat$date>=startDate[[c]]),]
+    re.for.corr <- re.for.corr[which(re.for.corr$date<=endDate[[c]]),]
+    
+    
+    weather.for.corr <- vals[is.element(vals$time,re.for.corr$date),]
+    weather.for.corr <- weather.for.corr[which(weather.for.corr$bound=="mean"),]
+    
+    # Average values over 2 days ---------------------------------
+    
+    
+    # average the weather over 2 and 4 days
+    remove(weather.for.corr.2days)
+    for (i in seq(1,length(re.for.corr$dat), 1) ){
+      tmp.vals1 = vals[is.element(vals$time,re.for.corr[i,"date"]),]
+      tmp.vals1 = tmp.vals1[which(tmp.vals1$bound=="mean"),]
+      
+      tmp.vals2 = vals[is.element(vals$time,re.for.corr[i,"date"]+1),]
+      tmp.vals2 = tmp.vals2[which(tmp.vals2$bound=="mean"),]
+      
+      # take the average
+      new.data = tmp.vals1
+      for (j in seq(1,length(new.data)-2)){
+        new.data[1,j] = (new.data[1,j] +tmp.vals2[1,j])/2
+      }
+      if (i==1){
+        weather.for.corr.2days = new.data
+      }else{
+        weather.for.corr.2days = rbind(weather.for.corr.2days,new.data)
+      }
     }
-  }
-  rownames(corr.vals)<-c()
-  
-  # write.table(corr.vals, "./Corr_Dez_to_Feb.tsv", sep="\t")
-  
-  
-  re.for.corr <- dat[which(dat$date>=as.Date("2016-11-01")),]
-  re.for.corr <- re.for.corr[which(re.for.corr$date<=as.Date("2017-3-01")),]
-  weather.for.corr <- vals[is.element(vals$time,re.for.corr$date),]
-  weather.for.corr <- weather.for.corr[which(weather.for.corr$bound=="mean"),]
-  
-  weather.labels = labels(weather.for.corr)
-  
-  library(Hmisc)
-  for (i in seq(6,length(weather.labels[[2]])-2)){
-    weather.labels[[2]][i] 
-    cor.vals2 = rcorr(re.for.corr$mean, weather.for.corr[,weather.labels[[2]][i]], type="pearson")
-    new.corr.vals = data.frame(label=weather.labels[[2]][i], correlation=cor.vals2$r["x","y"], p_value=cor.vals2$P["x","y"])
-    if (i==6){
-      corr.vals2 = new.corr.vals
-    }else{
-      corr.vals2 = rbind(corr.vals2, new.corr.vals)
+    
+    # Average values over 4 days ---------------------------------
+    
+    remove(weather.for.corr.4days)
+    remove(re.for.corr.4days)
+    
+    for (i in seq(1,length(re.for.corr$dat), 2) ){
+      tmp.vals1 = vals[is.element(vals$time,re.for.corr[i,"date"]),]
+      tmp.vals1 = tmp.vals1[which(tmp.vals1$bound=="mean"),]
+      
+      tmp.vals2 = vals[is.element(vals$time,re.for.corr[i,"date"]+1),]
+      tmp.vals2 = tmp.vals2[which(tmp.vals2$bound=="mean"),]
+      
+      tmp.vals3 = vals[is.element(vals$time,re.for.corr[i,"date"]+2),]
+      tmp.vals3 = tmp.vals3[which(tmp.vals3$bound=="mean"),]
+      
+      tmp.vals4 = vals[is.element(vals$time,re.for.corr[i,"date"]+3),]
+      tmp.vals4 = tmp.vals4[which(tmp.vals4$bound=="mean"),]
+      
+      
+      # take the average
+      new.data = tmp.vals1
+      new.re.for.corr.4days = re.for.corr[i,]
+      for (j in seq(1,length(new.data)-2)){
+        new.data[1,j] = (new.data[1,j] + tmp.vals2[1,j] + tmp.vals3[1,j] + tmp.vals4[1,j])/4
+      }
+      for (j in seq(1,length(re.for.corr)-1)){
+        new.re.for.corr.4days[1,j] = (new.re.for.corr.4days[1,j]+ re.for.corr[i+1,j])/2
+      }
+      if (i==1){
+        weather.for.corr.4days = new.data
+        re.for.corr.4days = new.re.for.corr.4days
+      }else{
+        weather.for.corr.4days = rbind(weather.for.corr.4days,new.data)
+        re.for.corr.4days = rbind(re.for.corr.4days,new.re.for.corr.4days)
+      }
     }
+    
+    # Average values over 6 days ---------------------------------
+    
+    
+    remove(weather.for.corr.6days)
+    remove(re.for.corr.6days)
+    
+    for (i in seq(1,length(re.for.corr$dat), 3) ){
+      tmp.vals1 = vals[is.element(vals$time,re.for.corr[i,"date"]),]
+      tmp.vals1 = tmp.vals1[which(tmp.vals1$bound=="mean"),]
+      
+      tmp.vals2 = vals[is.element(vals$time,re.for.corr[i,"date"]+1),]
+      tmp.vals2 = tmp.vals2[which(tmp.vals2$bound=="mean"),]
+      
+      tmp.vals3 = vals[is.element(vals$time,re.for.corr[i,"date"]+2),]
+      tmp.vals3 = tmp.vals3[which(tmp.vals3$bound=="mean"),]
+      
+      tmp.vals4 = vals[is.element(vals$time,re.for.corr[i,"date"]+3),]
+      tmp.vals4 = tmp.vals4[which(tmp.vals4$bound=="mean"),]
+      
+      tmp.vals5 = vals[is.element(vals$time,re.for.corr[i,"date"]+4),]
+      tmp.vals5 = tmp.vals5[which(tmp.vals5$bound=="mean"),]
+      
+      tmp.vals6 = vals[is.element(vals$time,re.for.corr[i,"date"]+5),]
+      tmp.vals6 = tmp.vals6[which(tmp.vals6$bound=="mean"),]
+      
+      
+      # take the average
+      new.data = tmp.vals1
+      new.re.for.corr.6days = re.for.corr[i,]
+      for (j in seq(1,length(new.data)-2)){
+        new.data[1,j] = (new.data[1,j] + tmp.vals2[1,j] + tmp.vals3[1,j] + tmp.vals4[1,j]  + tmp.vals5[1,j]  + tmp.vals6[1,j])/6
+      }
+      for (j in seq(1,length(re.for.corr)-1)){
+        new.re.for.corr.6days[1,j] = (new.re.for.corr.6days[1,j] + re.for.corr[i+1,j] + re.for.corr[i+2,j])/3
+      }
+      if (i==1){
+        weather.for.corr.6days = new.data
+        re.for.corr.6days = new.re.for.corr.6days
+      }else{
+        weather.for.corr.6days = rbind(weather.for.corr.6days,new.data)
+        re.for.corr.6days = rbind(re.for.corr.6days,new.re.for.corr.6days)
+      }
+    }
+    
+    # Average values over 8 days ---------------------------------
+    
+    
+    remove(weather.for.corr.8days)
+    remove(re.for.corr.8days)
+    
+    for (i in seq(1,length(re.for.corr$dat), 4) ){
+      tmp.vals1 = vals[is.element(vals$time,re.for.corr[i,"date"]),]
+      tmp.vals1 = tmp.vals1[which(tmp.vals1$bound=="mean"),]
+      
+      tmp.vals2 = vals[is.element(vals$time,re.for.corr[i,"date"]+1),]
+      tmp.vals2 = tmp.vals2[which(tmp.vals2$bound=="mean"),]
+      
+      tmp.vals3 = vals[is.element(vals$time,re.for.corr[i,"date"]+2),]
+      tmp.vals3 = tmp.vals3[which(tmp.vals3$bound=="mean"),]
+      
+      tmp.vals4 = vals[is.element(vals$time,re.for.corr[i,"date"]+3),]
+      tmp.vals4 = tmp.vals4[which(tmp.vals4$bound=="mean"),]
+      
+      tmp.vals5 = vals[is.element(vals$time,re.for.corr[i,"date"]+4),]
+      tmp.vals5 = tmp.vals5[which(tmp.vals5$bound=="mean"),]
+      
+      tmp.vals6 = vals[is.element(vals$time,re.for.corr[i,"date"]+5),]
+      tmp.vals6 = tmp.vals6[which(tmp.vals6$bound=="mean"),]
+      
+      tmp.vals7 = vals[is.element(vals$time,re.for.corr[i,"date"]+6),]
+      tmp.vals7 = tmp.vals7[which(tmp.vals7$bound=="mean"),]
+      
+      tmp.vals8 = vals[is.element(vals$time,re.for.corr[i,"date"]+7),]
+      tmp.vals8 = tmp.vals8[which(tmp.vals8$bound=="mean"),]
+      
+      
+      
+      # take the average
+      new.data = tmp.vals1
+      new.re.for.corr.8days = re.for.corr[i,]
+      for (j in seq(1,length(new.data)-2)){
+        new.data[1,j] = (new.data[1,j] + tmp.vals2[1,j] + tmp.vals3[1,j] + tmp.vals4[1,j]  + tmp.vals5[1,j]  + tmp.vals6[1,j]   + tmp.vals7[1,j]   + tmp.vals8[1,j])/8
+      }
+      for (j in seq(1,length(re.for.corr)-1)){
+        new.re.for.corr.8days[1,j] = (new.re.for.corr.8days[1,j] + re.for.corr[i+1,j] + re.for.corr[i+2,j] + re.for.corr[i+3,j])/4
+      }
+      if (i==1){
+        weather.for.corr.8days = new.data
+        re.for.corr.8days = new.re.for.corr.8days
+      }else{
+        weather.for.corr.8days = rbind(weather.for.corr.8days,new.data)
+        re.for.corr.8days = rbind(re.for.corr.8days,new.re.for.corr.8days)
+      }
+    }
+    
+    
+    # Average values over 10 days ---------------------------------
+    
+    
+    remove(weather.for.corr.10days)
+    remove(re.for.corr.10days)
+    
+    for (i in seq(1,length(re.for.corr$dat), 4) ){
+      tmp.vals1 = vals[is.element(vals$time,re.for.corr[i,"date"]),]
+      tmp.vals1 = tmp.vals1[which(tmp.vals1$bound=="mean"),]
+      
+      tmp.vals2 = vals[is.element(vals$time,re.for.corr[i,"date"]+1),]
+      tmp.vals2 = tmp.vals2[which(tmp.vals2$bound=="mean"),]
+      
+      tmp.vals3 = vals[is.element(vals$time,re.for.corr[i,"date"]+2),]
+      tmp.vals3 = tmp.vals3[which(tmp.vals3$bound=="mean"),]
+      
+      tmp.vals4 = vals[is.element(vals$time,re.for.corr[i,"date"]+3),]
+      tmp.vals4 = tmp.vals4[which(tmp.vals4$bound=="mean"),]
+      
+      tmp.vals5 = vals[is.element(vals$time,re.for.corr[i,"date"]+4),]
+      tmp.vals5 = tmp.vals5[which(tmp.vals5$bound=="mean"),]
+      
+      tmp.vals6 = vals[is.element(vals$time,re.for.corr[i,"date"]+5),]
+      tmp.vals6 = tmp.vals6[which(tmp.vals6$bound=="mean"),]
+      
+      tmp.vals7 = vals[is.element(vals$time,re.for.corr[i,"date"]+6),]
+      tmp.vals7 = tmp.vals7[which(tmp.vals7$bound=="mean"),]
+      
+      tmp.vals8 = vals[is.element(vals$time,re.for.corr[i,"date"]+7),]
+      tmp.vals8 = tmp.vals8[which(tmp.vals8$bound=="mean"),]
+      
+      tmp.vals9 = vals[is.element(vals$time,re.for.corr[i,"date"]+8),]
+      tmp.vals9 = tmp.vals9[which(tmp.vals9$bound=="mean"),]
+      
+      tmp.vals10 = vals[is.element(vals$time,re.for.corr[i,"date"]+9),]
+      tmp.vals10 = tmp.vals10[which(tmp.vals10$bound=="mean"),]
+      
+      
+      # take the average
+      new.data = tmp.vals1
+      new.re.for.corr.10days = re.for.corr[i,]
+      for (j in seq(1,length(new.data)-2)){
+        new.data[1,j] = (new.data[1,j] + tmp.vals2[1,j] + tmp.vals3[1,j] + tmp.vals4[1,j]  + tmp.vals5[1,j]  + tmp.vals6[1,j]   + tmp.vals7[1,j]   + tmp.vals8[1,j]    + tmp.vals9[1,j]    + tmp.vals10[1,j])/10
+      }
+      for (j in seq(1,length(re.for.corr)-1)){
+        new.re.for.corr.8days[1,j] = (new.re.for.corr.8days[1,j] + re.for.corr[i+1,j] + re.for.corr[i+2,j] + re.for.corr[i+3,j]  + re.for.corr[i+4,j])/5
+      }
+      if (i==1){
+        weather.for.corr.10days = new.data
+        re.for.corr.10days = new.re.for.corr.10days
+      }else{
+        weather.for.corr.10days = rbind(weather.for.corr.10days,new.data)
+        re.for.corr.10days = rbind(re.for.corr.10days,new.re.for.corr.10days)
+      }
+    }
+    
+    
+    # Compute Correlations for temperature humidity and school days ---------------------------------
+    
+    
+    
+    weather.labels = labels(weather.for.corr.4days)
+    plot_labels = c(6,7,24)
+    
+    library(Hmisc)
+    
+    for (pl in seq(1,length(plot_labels))){
+      i = plot_labels[[pl]]
+      weather.labels[[2]][i] 
+      cor.vals = rcorr(re.for.corr$mean, weather.for.corr[,weather.labels[[2]][i]], type="pearson")
+      new.corr.vals = data.frame(label=weather.labels[[2]][i], correlation=cor.vals$r["x","y"], p_value=cor.vals$P["x","y"], days=2, c=c, sub=sub)
+      if (i==6 && c==1 && sub==1){
+        corr.vals.days = new.corr.vals
+      }else{
+        corr.vals.days = rbind(corr.vals.days, new.corr.vals)
+      }
+    }
+    
+    for (pl in seq(1,length(plot_labels))){
+      i = plot_labels[[pl]]
+      weather.labels[[2]][i] 
+      cor.vals = rcorr(re.for.corr.4days$mean, weather.for.corr.4days[,weather.labels[[2]][i]], type="pearson")
+      new.corr.vals = data.frame(label=weather.labels[[2]][i], correlation=cor.vals$r["x","y"], p_value=cor.vals$P["x","y"], days=4, c=c, sub=sub)
+      corr.vals.days = rbind(corr.vals.days, new.corr.vals)
+    }
+    
+    for (pl in seq(1,length(plot_labels))){
+      i = plot_labels[[pl]]
+      weather.labels[[2]][i] 
+      cor.vals = rcorr(re.for.corr.6days$mean, weather.for.corr.6days[,weather.labels[[2]][i]], type="pearson")
+      new.corr.vals = data.frame(label=weather.labels[[2]][i], correlation=cor.vals$r["x","y"], p_value=cor.vals$P["x","y"], days=6, c=c, sub=sub)
+      corr.vals.days = rbind(corr.vals.days, new.corr.vals)
+    }
+    
+    for (pl in seq(1,length(plot_labels))){
+      i = plot_labels[[pl]]
+      weather.labels[[2]][i] 
+      cor.vals = rcorr(re.for.corr.8days$mean, weather.for.corr.8days[,weather.labels[[2]][i]], type="pearson")
+      new.corr.vals = data.frame(label=weather.labels[[2]][i], correlation=cor.vals$r["x","y"], p_value=cor.vals$P["x","y"], days=8, c=c, sub=sub)
+      corr.vals.days = rbind(corr.vals.days, new.corr.vals)
+    }
+    
+    
+    for (pl in seq(1,length(plot_labels))){
+      i = plot_labels[[pl]]
+      weather.labels[[2]][i] 
+      cor.vals = rcorr(re.for.corr.10days$mean, weather.for.corr.10days[,weather.labels[[2]][i]], type="pearson")
+      new.corr.vals = data.frame(label=weather.labels[[2]][i], correlation=cor.vals$r["x","y"], p_value=cor.vals$P["x","y"], days=10, c=c, sub=sub)
+      corr.vals.days = rbind(corr.vals.days, new.corr.vals)
+    }
+    
+    
   }
-  rownames(corr.vals2)<-c()
-  
-  corr.vals[,"p-value"] = corr.vals$p_value
-  corr.vals$p_value = c()
-  corr.vals2[,"p-value"] = corr.vals2$p_value
-  corr.vals2$p_value = c()
-  
-  rownames(corr.vals) = corr.vals$label
-
-  title1 <- textGrob("2016-12-01 until 2017-2-01",gp=gpar(fontsize=10), just = "left")
-  title2 <- textGrob("2016-11-01 until 2017-3-01",gp=gpar(fontsize=10))
-  
-  corr.vals$label = c()
-  corr.vals2$label = c()
-  
-  tab1 = tableGrob(corr.vals)
-  tab2 = tableGrob(corr.vals2,rows = NULL)
-  
-  library(grid)
-  library(gridExtra)
-  library(gtable)
-  
-  padding <- unit(5,"mm")
-  
-  table1 <- gtable_add_rows(
-    tab1, 
-    heights = grobHeight(title1) + padding,
-    pos = 0)
-  
-  table2 <- gtable_add_rows(
-    tab2, 
-    heights = grobHeight(title2) + padding,
-    pos = 0)
   
   
-  table1 <- gtable_add_grob(
-    table1, 
-    title1, 
-    1, 1, 1, ncol(table1))
   
-  table2 <- gtable_add_grob(
-    table2, 
-    title2, 
-    1, 1, 1, ncol(table2))
   
-  p_tab = arrangeGrob(table1,table2,ncol=2)
-  
-  ggsave(plot=p_tab,paste("/Users/nicmuell/Documents/github/BaselFlu-Text/Figures/Supplement/Correlation/WeatherCorr.sub",sub,".pdf",sep=""),width=13, height=6)
-
   
   
   # plot the sampling proprotion
@@ -310,3 +512,34 @@ ggsave(plot=plot.sampling,"/Users/nicmuell/Documents/github/BaselFlu-Text/Figure
 plot.weather = do.call("grid.arrange",c(p_wea, ncol=4))
 ggsave(plot=plot.weather,"/Users/nicmuell/Documents/github/BaselFlu-Text/Figures/Supplement/bdsky_weather_all.pdf",width=20, height=12)
 ggsave(plot=plot.weather,"/Users/nicmuell/Documents/github/BaselFlu-Text/Figures/Supplement/bdsky_weather_all.png",width=20, height=12)
+
+
+
+p.pval <- ggplot() +
+  geom_line(data=corr.vals.days, aes(x=days, y=p_value, color=as.character(c), group=interaction(sub,c))) +
+  scale_y_log10()+
+  theme_minimal()+
+  scale_color_OkabeIto(  breaks = c("1", "2"),
+                         labels = c("2016-11-01 until 2017-03-01", "2016-12-01 until 2017-02-01")
+  ) +
+  facet_wrap(label~.)+
+  xlab("number of days data was averaged over") +
+  ylab("p-value") +   labs(color = "time interval considered\nfor correlation")
+plot(p.pval)
+
+p.corrcoeff <- ggplot() +
+  geom_line(data=corr.vals.days, aes(x=days, y=correlation, color=as.character(c), group=interaction(sub,c))) +
+  theme_minimal()+
+  scale_color_OkabeIto(  breaks = c("1", "2"),
+                         labels = c("2016-11-01 until 2017-03-01", "2016-12-01 until 2017-02-01")
+  ) +
+  facet_wrap(label~.) +
+  xlab("number of days data was averaged over") +
+  ylab("correlation coefficient")  +   labs(color = "time interval considered\nfor correlation")
+plot(p.corrcoeff)
+
+ggsave(plot=p.pval,"/Users/nicmuell/Documents/github/BaselFlu-Text/Figures/Supplement/Correlation/p_value_subset.pdf", width=7, height=3)
+ggsave(plot=p.pval,"/Users/nicmuell/Documents/github/BaselFlu-Text/Figures/Supplement/Correlation/p_value_subset.png", width=7, height=3)
+ggsave(plot=p.corrcoeff,"/Users/nicmuell/Documents/github/BaselFlu-Text/Figures/Supplement/Correlation/corrcoeff_subset.png", width=7, height=3)
+ggsave(plot=p.corrcoeff,"/Users/nicmuell/Documents/github/BaselFlu-Text/Figures/Supplement/Correlation/corrcoeff_subset.pdf", width=7, height=3)
+

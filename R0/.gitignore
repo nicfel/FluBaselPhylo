@@ -1,6 +1,7 @@
 *.csv
 *.tsv
 /bdsky/
+/bdskysubset/
 plotBDSKY.R
 plotTreeHeights.R
 getBSKYxmls.m
