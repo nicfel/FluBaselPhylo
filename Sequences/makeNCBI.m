@@ -50,7 +50,7 @@ segment_number = [4, 7, 6, 5, 8, 3, 2, 1];
 
 f = fopen('NCBI_seq_map.tsv', 'w');
 % print header of csv file
-fprintf(f, 'SeqID\tOrganism\tcountry\tcollection-date\thost\tserotype\tPassage History\tisolation-source\tsegment\tnote\n');
+fprintf(f, 'SeqID\tOrganism\tcountry\tcollection-date\thost\tserotype\tisolation-source\tsegment\tnote\n');
 
 c = 1;clear Data
 
@@ -91,7 +91,7 @@ for i = 1 : length(segments)
             year = strsplit(char(MetaData.collection{ind}), '-');
             
             
-            fprintf(f, '%s\tInfluenza A virus (A/Switzerland/%s/%s(H3N2))\tSwitzerland: Basel\t%s\tHomo sapiens%s\tH3N2\tDirect\tNasopharyngeal\t%d\t\n',...
+            fprintf(f, '%s\tInfluenza A virus (A/Switzerland/%s/%s(H3N2))\tSwitzerland: Basel\t%s\tHomo sapiens%s\tH3N2\tNasopharyngeal\t%d\t\n',...
                 SeqID, Map.number{mapid},year{3},... 
                 MetaData.collection{ind}, gender, segment_number(i));
             Data(c) = fasta(j);
