@@ -1,0 +1,390 @@
+---
+title: "Flu Basel Phylogenetics: Analysis to estimate how different groups are connected"
+author: "Brian Lang"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  rmdformats::readthedown:
+  highlight: kate
+description: This is the script is doing the model based estimation of how many connections members from different groups have
+---
+```{r libraries and sources, include = FALSE}
+rm(list = ls())
+
+# This function loads the packages you want. If you don't have them, it tries to install them. 
+lapply(list("knitr",
+            "tidyverse",
+            "lubridate",
+            "contrast",
+            "multcomp",
+            "colorblindr",
+            "foreign",
+            "nnet"),
+       function(x) {
+         if (!require(x, character.only = TRUE)) {
+           install.packages(x);
+           require(x, )
+         }
+       })
+
+
+# This is your file title, when you change this, it effects the folder name for
+# your cache and figures
+fileidentifier <- "anova"
+```
+
+```{r global_options, include=FALSE}
+# This is a flag which fixes the problem with caching. If you want to reset your
+# cache, change this to TRUE
+delete_cache = FALSE
+
+if (delete_cache) {
+  message("deleting cache...")
+  unlink(paste("./cache/", fileidentifier, "/", sep = ""), recursive = T)
+  knitr::opts_chunk$set(cache = FALSE)
+} else {
+  knitr::opts_chunk$set(cache = TRUE)
+}
+
+knitr::opts_chunk$set(
+  cache.path = paste("./cache/", fileidentifier, "/", sep = ""),
+  fig.width = 7,
+  fig.height = 7,
+  fig.align = "center",
+  fig.path = paste("./figs/", fileidentifier, "/", sep = ""),
+  fig.ext = "pdf",
+  dev = "pdf",
+  echo = FALSE,
+  warning = FALSE, 
+  message = FALSE,
+  comment = NA,
+  tidy = TRUE)
+
+```
+
+## Data Set
+
+```{r data step, include = TRUE}
+data_set <- read.csv(file = "./numberConnections.csv") %>% dplyr::mutate(id = 1:n()) %>%
+  dplyr::mutate(group = as.factor(group))
+
+data_set %>%
+  DT::datatable(rownames = FALSE, options = list(pageLength = 5, dom = 'tip'))
+```
+
+## Data summary
+
+
+```{r summary data, include = TRUE}
+dictionary <- c("pre-school", "school", "adults unknown", "adults with kids", "adults no kids", "elderly")
+
+data_set %>% 
+  dplyr::group_by(group) %>%
+  dplyr::summarize(cutoff2_mean = round(mean(cutoff2), 4)) %>%
+  DT::datatable(rownames = FALSE, options = list(pageLength = 6, dom = 'tip'))
+```
+
+## Model Building
+We build a poisson model for the probability of being in a group of size **cutoff2** given
+age group **group**. We do this because our data is count data. We do not want a intercept term, so we remove it. Once we check to see if our grouping variable is significant on its own, we go ahead and check for significant differences between groups. 
+
+The poisson model is nested in the negative binomial model, which means we can directly compare the model likelihoods to choose the best model. The poisson model assumes conditional means are equal to the conditional variances, negative binomal relaxes this assumption. With the comparison, we find that the negative binomial model is significantly better than the poisson model. 
+
+```{r build model, include = TRUE, echo = TRUE}
+poisson_model <- list()
+geom_model <- list()
+nb_model <- list()
+
+for (i in seq(1,5)){
+  sub_set = data_set
+  sub_set$cutoff = data_set[,paste("cutoff", i, sep="")]
+  
+  poisson_model[[i]] <- glm(cutoff ~ group - 1, data = sub_set, family = "poisson")
+  poisson_model[[i]] %>% aov() %>% summary()
+  
+  geom_model[[i]] <-  glm(formula = cutoff ~ group - 1, data = sub_set, family= negative.binomial(theta = 1))
+  geom_model[[i]] %>% aov() %>% summary()
+  
+  nb_model[[i]] <- MASS::glm.nb(formula = cutoff ~ group - 1, data = sub_set, link = "log")
+  nb_model[[i]] %>% aov() %>% summary()
+  
+
+  print(pchisq((2 * (logLik(geom_model[[i]]) - logLik(poisson_model[[i]]))), df = 1, lower.tail = FALSE))
+  
+  print(pchisq((2 * (logLik(nb_model[[i]]) - logLik(geom_model[[i]]))), df = 1, lower.tail = FALSE))
+  
+}
+```
+
+just for some extra info, we check here to see the estimates of the means, if you compare them to above, you see they line up well.
+```{r model info, include = TRUE, echo = TRUE}
+nb_model[[2]] %>%  broom::tidy(exp = TRUE) %>% knitr::kable()
+```
+
+
+## Model Contrasts
+
+Here we test the difference between each category of the data, and corrected using Schaffer's method. These are model-based t-tests between the levels of our data. First "diff" is the log relative (%) difference between level X and Y. "exp_diff" is in real value space. Upper and Lower are 95% confidence intervals for the difference between X and Y. 
+```{r contrasts 1, include = TRUE, echo = TRUE}
+set.seed(21492332)
+contrasts_table <- list()
+
+for (i in seq(1,5)){
+  contrasts_table[[i]] <- glht(model = nb_model[[i]], linfct = mcp(group = "Tukey"), test = "HSD") %>% summary() %>% .$test
+  
+  print(contrasts_table[[i]])
+  
+  data_frame(test = names(contrasts_table[[i]]$coefficients),
+             diff = contrasts_table[[i]]$coefficients, 
+             sd = contrasts_table[[i]]$sigma,
+             pval = contrasts_table[[i]]$pvalues)  %>% 
+    dplyr::mutate(upper = exp(diff + (1.96 * sd)), lower = exp(diff - (1.96 * sd)), exp_dif = exp(diff)) %>% knitr::kable()
+}
+```
+
+## Plot
+
+```{r plots 1, include = TRUE, fig.height = 5, echo = TRUE, fig.show=TRUE, fig.width=10}
+for (i in seq(1,5)){
+    Plot_data <- bind_rows(data_frame(test = names(contrasts_table[[i]]$coefficients), diff = contrasts_table[[i]]$coefficients, sd = contrasts_table[[i]]$sigma, pval = contrasts_table[[i]]$pvalues)  %>% 
+                             dplyr::mutate(upper = exp(diff + 1.96 * sd), lower = exp(diff - 1.96 * sd), exp_diff = exp(diff)) %>%
+                             tidyr::separate(test, into = c("g1", "g2"), sep = " - ") %>% 
+                             dplyr::mutate(gb1 = factor(dictionary[as.numeric(g1)], levels = dictionary, ordered = TRUE), 
+                                           gb2 = factor(dictionary[as.numeric(g2)], levels = dictionary, ordered = TRUE)),
+                           data_frame(test = names(contrasts_table[[i]]$coefficients), diff = -contrasts_table[[i]]$coefficients, sd = contrasts_table[[i]]$sigma, pval = contrasts_table[[i]]$pvalues)  %>% 
+                             dplyr::mutate(upper = exp(diff + 1.96 * sd), lower = exp(diff - 1.96 * sd), exp_diff = exp(diff)) %>%
+                             tidyr::separate(test, into = c("g1", "g2"), sep = " - ") %>% 
+                             dplyr::mutate(gb2 = factor(dictionary[as.numeric(g1)], levels = dictionary, ordered = TRUE), 
+                                           gb1 = factor(dictionary[as.numeric(g2)], levels = dictionary, ordered = TRUE)))
+  
+  p=Plot_data %>%
+    ggplot() +
+    geom_crossbar(aes(x = 1, ymin = upper, ymax = lower, y = exp_diff, fill = gb2), alpha = 1, position = position_dodge(width = 1)) +
+    facet_grid(.~ gb1, space = "free") + 
+    geom_hline(aes(yintercept = 1), colour = "red", alpha = .7) + 
+    theme_bw() + 
+    theme(axis.title.x = element_blank(), axis.text.x = element_blank(),
+          axis.ticks.x = element_blank(), legend.position = "top") +
+    scale_fill_manual(values = colorblindr::palette_OkabeIto[1:6]) + 
+    guides(fill = guide_legend(NULL, nrow = 1)) +
+    scale_y_continuous("Average fold-difference", breaks = seq(0, 6, .5)) +
+    theme(strip.text = element_text(colour = "black", size = rel(1)),
+          axis.title.y = element_text(size = rel(1.3), face = "bold"),
+          axis.text.y = element_text(colour = "black", size = rel(1.1)),
+          legend.text = element_text(colour = "black", size = rel(1)),
+          legend.box.margin = margin(0,0,0,0,unit = "pt"),
+          legend.margin = margin(0,0,0,0))
+   ggsave(plot=p, paste("/Users/nicmuell/Documents/github/BaselFlu-Text/Figures/Supplement/Connections/foldConnections.cutoff", i, ".pdf",sep=""), height=5, width=10)
+
+
+}
+```
+
+```{r plots 2, include = TRUE, fig.height = 5, echo = TRUE, fig.show=TRUE}
+# for (i in seq(1,5)){
+#   data_frame(test = names(contrasts_table$coefficients), diff = contrasts_table$coefficients, sd = contrasts_table$sigma, pval = contrasts_table$pvalues)  %>% 
+#     dplyr::mutate(upper = exp(diff + 1.96 * sd), lower = exp(diff - 1.96 * sd), exp_diff = exp(diff)) %>%
+#     tidyr::separate(test, into = c("g1", "g2"), sep = " - ") %>% 
+#     dplyr::mutate(g1 = factor(dictionary[as.numeric(g1)], levels = dictionary, ordered = TRUE), 
+#                   g2 = factor(dictionary[as.numeric(g2)], levels = dictionary, ordered = TRUE)) %>%
+#     ggplot() +
+#     geom_crossbar(aes(x = g2, ymin = upper, ymax = lower, y = exp_diff, fill = g2), alpha = 1) +
+#     facet_grid(. ~ g1, space = "free") + 
+#     geom_hline(aes(yintercept = 1), colour = "red", alpha = .7) + 
+#     theme_bw() + 
+#     theme(axis.title.x = element_blank(), axis.text.x = element_blank(),
+#           axis.ticks.x = element_blank(), legend.position = "top") +
+#     scale_fill_manual(values = colorblindr::palette_OkabeIto[1:6]) + 
+#     guides(fill = guide_legend(NULL, nrow = 1)) +
+#     scale_y_continuous("Average fold-difference", breaks = seq(0, 6, .5)) +
+#     theme(strip.text = element_text(colour = "black", size = rel(1)),
+#           axis.title.y = element_text(size = rel(1.3), face = "bold"),
+#           axis.text.y = element_text(colour = "black", size = rel(1.1)),
+#           legend.text = element_text(colour = "black", size = rel(1)),
+#           legend.box.margin = margin(0,0,0,0,unit = "pt"),
+#           legend.margin = margin(0,0,0,0))
+# }
+```
+
+```{r average cluster size, include = TRUE, fig.width = 10, echo = TRUE, fig.show=TRUE}
+for (i in seq(1,5)){
+  p = exp(est <- cbind(Estimate = coef(nb_model[[i]]), confint(nb_model[[i]]))) %>% as_data_frame() %>% mutate(group = dictionary) %>% setNames(c("est", "lwr", "upr", "grp")) %>% 
+    dplyr::mutate(grp = factor(grp, levels = dictionary, ordered = TRUE)) %>% ggplot() + 
+    geom_crossbar(aes(x = grp, ymin = lwr, ymax = upr, y = est, fill = grp), alpha = 1) + guides(fill = "none")+ 
+    theme_bw() + 
+    theme(axis.title.x = element_blank(), axis.text.x = element_blank(),
+          axis.ticks.x = element_blank(), 
+          legend.position = "top") +
+    ggplot2::scale_fill_manual(values = colorblindr::palette_OkabeIto[1:6]) + 
+    guides(fill = guide_legend(NULL, nrow = 2)) +
+    scale_y_continuous("Number of conenctions below threshold")
+     ggsave(plot=p, paste("/Users/nicmuell/Documents/github/BaselFlu-Text/Figures/Supplement/Connections/NrConnections.cutoff", i, ".pdf",sep=""), height=5, width=10)
+
+}
+```
+
+## Elderly against all
+
+In the context of our model we can compare the average of the elderly population to the average of all others. First I show the raw data then I show the estimated difference. 
+
+```{r elderly against all, include = TRUE, echo = TRUE}
+# data_set %>% mutate(elderly = if_else(group == 6, 1, 0)) %>% group_by(elderly) %>% summarise(mean(cutoff2)) 
+# 
+# elderly = matrix(c(-1/5, -1/5, -1/5, -1/5, -1/5, 1), 1)
+# 
+# glht(nb_model, linfct = elderly) %>% summary()
+```
+
+<!-- **exp(0.50905)** = *The average clustersize for the elderly is 1.82 times larger than the average clustersize for elderly than other groups.*  -->
+
+<!-- ```{r diy contrasts} -->
+<!-- elderly = c(-1/5, -1/5, -1/5, -1/5, -1/5, 1) -->
+<!-- adultswkids = c(0, 0, -1/2, 1, -1/2, 0) -->
+<!-- school_pre = c(-1, 1, 0, 0, 0, 0) -->
+<!-- rbind(elderly, adultswkids, school_pre) -->
+<!-- glht(nb_model, linfct = rbind(elderly, adultswkids, school_pre)) %>% summary() -->
+<!-- ``` -->
+
+
+```{r all cutoffs}
+set.seed(21492332)
+models <-data_set %>% 
+  tidyr::gather(cutoff, clusters, cutoff1:cutoff5) %>%
+  dplyr::group_by(cutoff) %>% 
+  tidyr::nest() %>% 
+  dplyr::mutate(glmnb = purrr::map(data, ~MASS::glm.nb(data = .x, formula = clusters ~ group - 1, link = "log")),
+                cont_table = purrr::map(glmnb, function(X){
+                  set.seed(21492332)
+                  glht(model = X, linfct = mcp(group = "Tukey"), test = "HSD") %>% summary() %>% .$test}), 
+                p_table = purrr::map(cont_table, ~data_frame(test = names(.x$coefficients), pval = .x$pvalues))) %>% unnest(p_table) %>% 
+  tidyr::separate(test, into = c("g1", "g2"), sep = " - ") %>% 
+  dplyr::mutate(g1 = factor(dictionary[as.numeric(g1)], levels = dictionary, ordered = TRUE), 
+                g2 = factor(dictionary[as.numeric(g2)], levels = dictionary, ordered = TRUE)) %>% 
+  tidyr::spread(g2,pval)
+
+
+models %>% rowwise() %>% dplyr::mutate_at(.vars = -c(1:2), .funs = (function(X){if(is.na(X)){""}else as.character(signif(as.numeric(X),3))})) %>% knitr::kable()
+```
+
+## Between group connections
+```{r data_between_connections}
+data_nicola_connection = list()
+modelled = list()
+for (i in seq(1,5)){
+  data_nicola_connection[[i]] <- readr::read_csv(file = paste("./numberConnections_cuotff", i, ".csv", sep="")) %>%
+    dplyr::mutate(id = 1:n()) %>%
+    tidyr::gather(group2, count, con.group1:con.group6) %>% group_by(id) %>% arrange(id)%>%
+    dplyr::mutate(weight = 1/sum(count, na.rm = TRUE)) %>% filter(weight != Inf & count != 0) %>%
+    dplyr::mutate(group2 = as.numeric(stringr::str_extract(group2, "[0-9]"))) %>%
+    dplyr::group_by(group, group2, id) %>%
+    dplyr::group_by(age, group, group2, id, weight, count) %>%
+    dplyr::summarize(count2 = purrr::map(count, ~rep(1, .x))) %>%
+    tidyr::unnest() %>%
+    dplyr::select(age, group, group2, id, weight, count)%>% 
+    dplyr::group_by(group2) %>% 
+    dplyr::mutate(nobs = n()) %>%
+    dplyr::group_by(group2, nobs) %>% 
+    tidyr::nest() %>%
+    dplyr::mutate(nobs_perc = sum(nobs)/nobs) %>%
+    dplyr::mutate(weight = nobs_perc /sum(nobs_perc)) %>% 
+    tidyr::unnest() %>% 
+    dplyr::mutate(group2 = as.character(group2), group = as.character(group)) %>%
+    dplyr::arrange(group, id) %>% 
+    dplyr::select(group2, weight, group)
+  
+  modelled[[i]] <- multinom(data =  data_nicola_connection[[i]],
+                       formula =  group2 ~ group - 1,
+                       weights = weight,
+                       maxit = 1000, Hess = TRUE)
+}
+
+dictionary <- c("pre-school", "school", "adults unknown", "adults with kids", "adults no kids", "elderly")
+```
+
+```{r plot_data_connections}
+plotting_data_probs=list()
+for (i in seq(1,5)){
+
+  plotting_data_probs[[i]] <- dplyr::right_join(data_nicola_connection[[i]] %>%
+                                             dplyr::group_by(group) %>%
+                                             dplyr::summarize(tot_nobs = n()) %>%
+                                             dplyr::mutate(group = factor(as.numeric(group), levels = 1:6,
+                                                                          labels = dictionary, ordered = TRUE)),
+                                           cbind(data_frame(group = 1:6),
+                                                 predict(modelled[[i]], newdata = dplyr::data_frame(group = as.character(1:6)),
+                                                         type = "prob")) %>%
+                                             tidyr::gather(group2, count,
+                                                           as.character(1):as.character(6)) %>%
+                                             dplyr::mutate(group = factor(as.numeric(group),
+                                                                          levels = 1:6, labels = dictionary, ordered = TRUE),
+                                                           group2 = factor(as.numeric(group2), levels = 1:6,
+                                                                           labels = dictionary, ordered = TRUE))  %>%
+                                             dplyr::group_by(group) %>%
+                                             dplyr::mutate(ods = (count/(1-count))) %>%
+                                             dplyr::group_by(group2) %>%
+                                             dplyr::mutate(lods_rat = log(ods / ods[group == group2]))) %>%
+    dplyr::mutate(pred_count = tot_nobs * count) %>%
+    dplyr::mutate(wilson = purrr::map2(pred_count, 
+                                       tot_nobs,
+                                       ~ Hmisc::binconf(.x, .y, alpha = .05, method = "wilson") %>%
+                                         dplyr::as_data_frame())) %>%
+    tidyr::unnest()
+}
+```
+
+```{r plot_one_multinomial, fig.width = 10, fig.show=TRUE}
+for (i in seq(1,5)){
+  p_mat = plotting_data_probs[[i]] %>%
+    ggplot2::ggplot(aes(x = group2, y = PointEst, group = group, colour = group)) +
+    ggplot2::geom_point(position = position_dodge(width = 1), shape = 15, size = 3)  +
+    ggplot2::geom_errorbar(aes(ymax = Upper, ymin = Lower), position = position_dodge(width = 1)) +
+    ggplot2::theme_bw() +
+    scale_color_OkabeIto() +
+    ggplot2::facet_grid(.~group2, scales = "free") +
+    ggplot2::guides(colour = guide_legend("From Group")) +
+    ggplot2::theme(strip.text = element_blank(),
+          axis.title = element_text(size = rel(1.25)),
+          axis.text.y = element_text(colour = "black", size = rel(1.25)),
+          axis.text.x = element_text(colour = "black", size = rel(1.25)),
+          legend.box.margin = margin(0,0,0,0,unit = "pt"),
+          legend.margin = margin(0,0,0,0),
+          legend.position = "right" ,
+          legend.direction = "vertical",
+          legend.title.align = .5,
+          legend.text = element_text(colour = "black", size = rel(1.25)),
+          legend.title = element_text(colour = "black", size = rel(1.5))) +
+    ggplot2::labs(x = "To Group", y = "Probability", title = "95% CI for multinomial probability", 
+                  subtitle = "Probability of being clustered with 'to group' given you belong to 'from group'")
+    ggsave(plot=p_mat, paste("/Users/nicmuell/Documents/github/BaselFlu-Text/Figures/Supplement/Multinomial/Group_Mixing_multreg_lin.cutoff",i,".pdf",sep=""),width=8, height=7)
+
+}
+```
+
+```{r plot_two_multinomial, fig.width = 10, fig.show=TRUE}
+for (i in seq(1,5)){
+  p_mat = plotting_data_probs[[i]] %>%
+    ggplot2::ggplot(aes(x = 1, y = PointEst, group = paste(group,group2))) +
+    ggplot2::geom_point(position = position_dodge(width = 1), shape = 15, size = 3)  +
+    ggplot2::geom_errorbar(aes(ymax = Upper, ymin = Lower), position = position_dodge(width = 1)) +
+    ggplot2::theme_bw() +
+    # ggplot2::scale_color_brewer(palette = "Dark2") +
+    ggplot2::facet_grid(group~group2, switch = "x") +
+    ggplot2::guides(colour = "none") +
+    ggplot2::theme(axis.title = element_text(size = rel(1.25)),
+          axis.text.y = element_text(colour = "black", size = rel(1.25)),
+          axis.text.x = element_blank(),
+          axis.ticks.x = element_blank(),
+          legend.box.margin = margin(0,0,0,0,unit = "pt"),
+          legend.margin = margin(0,0,0,0),
+          legend.position = "right" ,
+          legend.direction = "vertical",
+          legend.title.align = .5,
+          legend.text = element_text(colour = "black", size = rel(1.25)),
+          legend.title = element_text(colour = "black", size = rel(1.5))) +
+    ggplot2::labs(x = NULL, y = "Probability")
+  
+    # ggplot2::labs(x = NULL, y = "Probability", title = "95% CI for multinomial probability",
+    #               subtitle = "Probability of your cluster containing group Y given you belong to group X")
+  ggsave(plot=p_mat, paste("/Users/nicmuell/Documents/github/BaselFlu-Text/Figures/Supplement/Multinomial/Group_Mixing_multreg.cutoff",i,".pdf",sep=""),width=8, height=7)
+}
+```
+
