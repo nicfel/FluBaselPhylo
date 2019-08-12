@@ -55,4 +55,4 @@ Contains the compiled bdsky package used for the Reff analysis
 
 ## TimeTree
 
-Contains the pipeline to make the timetree shown in Figure 1. The pipeline uses raxml and timetree to build a timed phylogenetic tree and follows the (nextstrain.org)[nextstrain.org] pipeline.
+Contains the pipeline to make the timetree shown in Figure 1. The pipeline uses raxml and timetree to build a timed phylogenetic tree and follows the [nextstrain.org](nextstrain.org) pipeline.
