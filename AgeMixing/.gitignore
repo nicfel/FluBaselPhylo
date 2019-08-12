@@ -1,0 +1,17 @@
+/agemixingout/
+/ageprior/
+/out/
+/agemixingprior/
+/groupmixing/
+
+*.mat
+plotGroupMixing.R
+plotAgeMixingPairs.R
+plotAgeMixing.R
+
+combineAgeMixing.m
+getAgeMixing.m
+getGroupMixing.m
+
+runAgeMixing.sh
+runGroupMixing.sh
