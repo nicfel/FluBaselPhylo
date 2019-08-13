@@ -74,8 +74,6 @@ for i = 1 : length(dublicated)
             indices2 = find(ismember(Data.(name2).(segments{j}).pos,p2));
             fprintf('\t1: %s\n',sprintf('%d ', Data.(name1).(segments{j}).af(indices1)));
             fprintf('\t2: %s\n',sprintf('%d ', Data.(name2).(segments{j}).af(indices2)));
-           
-%             diff = find(
         else
             if Data.(name1).(segments{j}).pos ~= Data.(name2).(segments{j}).pos
                 fprintf('position: %s %s\n', dublicated{i}, segments{j})
