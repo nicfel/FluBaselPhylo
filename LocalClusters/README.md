@@ -1,4 +1,4 @@
 # LocalClusters
-First, phylogenetic trees are inferred for each of the rough clusters from the Clusters folder. This is done for either the clustering based on the pairwise time differences (for tha HA only) or based on the nucleotide differences (based on all segments)
 
-Sequences that are then grouped into these intitial clusters are next 
+For each of the initial clusters that were done based on nucleotide differences containing sequences from this study and from [gisaid.org](gisaid.org), a BEAST2 xml is made using a constant coalescent prior and the evolutionary rates estimated in the evolutionary rates folder.
+For each logged iteration on the BEAST2 run, ancestral state reconstruction is then performed in order to assess which sequences are in the same local cluster, which is then used to dermine the number of introductions and the effective reproduction number over time.
