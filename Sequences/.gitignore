@@ -1,5 +1,4 @@
 .DS_Store
-/consensus/
 /vcf/
 /gisaid/*.fasta
 /rawreads/
